@@ -1,97 +1,98 @@
-.. zephyr:code-sample:: blinky
-   :name: Blinky
-   :relevant-api: gpio_interface
-
-   Blink an LED forever using the GPIO API.
+==============================
+Modbus RTU over UART with nRF91
+==============================
 
 Overview
-********
+========
+This project demonstrates a basic implementation of Modbus RTU communication over RS485 using the nRF9151 development kit and Zephyr RTOS. The application:
 
-The Blinky sample blinks an LED forever using the :ref:`GPIO API <gpio_api>`.
+- Uses `UART1` to send Modbus commands and receive responses from a Modbus slave (e.g., soil moisture sensor).
+- Controls RS485 direction via two GPIO pins: `DE` and `RE`.
+- Uses `UART0` for debug messages over a USB or UART console.
+- Implements UART transmission and reception using callbacks and semaphores.
 
-The source code shows how to:
+Hardware Setup
+==============
+- **Board**: nRF9151 Development Kit
+- **Modbus RTU Module (RS485)**
+  - `DI` (Data In): Connected to `TX` of `UART1`
+  - `RO` (Receiver Out): Connected to `RX` of `UART1` (via level shifter or voltage divider)
+  - `DE`: Connected to `GPIO0.23` (Direction Enable)
+  - `RE`: Connected to `GPIO0.22` (Receive Enable)
 
-#. Get a pin specification from the :ref:`devicetree <dt-guide>` as a
-   :c:struct:`gpio_dt_spec`
-#. Configure the GPIO pin as an output
-#. Toggle the pin forever
+.. note::
 
-See :zephyr:code-sample:`pwm-blinky` for a similar sample that uses the PWM API instead.
+    If your Modbus module uses 5V logic, ensure to use level shifters or voltage dividers to protect the nRF9151, which uses 1.8V logic.
 
-.. _blinky-sample-requirements:
+Features
+========
+- Sends Modbus RTU request (example: Read Holding Registers)
+- Waits for Modbus RTU response using UART receive callback
+- Handles UART TX/RX using semaphores
+- Controls transmission/reception direction using GPIOs
+- Toggles an onboard LED as a heartbeat, only for testing purposes
 
-Requirements
-************
+How It Works
+============
+1. **GPIO Initialization**: Configures `RE` and `DE` pins as outputs to control Modbus direction.
+2. **UART Initialization**: Sets up both UART0 and UART1 with callbacks.
+3. **Transmission**: When sending a Modbus frame, the application sets `DE=1` and `RE=0`.
+4. **Reception**: After TX, sets `DE=0` and `RE=1` to listen for a response.
+5. **Semaphores**: Used to block the main thread until TX or RX completes.
 
-Your board must:
+Build and Flash
+===============
+1. Clone this repository into a Zephyr workspace.
+2. Add the required configuration to `prj.conf`.
+3. Build and flash with:
 
-#. Have an LED connected via a GPIO pin (these are called "User LEDs" on many of
-   Zephyr's :ref:`boards`).
-#. Have the LED configured using the ``led0`` devicetree alias.
+   .. code-block:: bash
 
-Building and Running
-********************
+      west build -b nrf9151dk_nrf9151
+      west flash
 
-Build and flash Blinky as follows, changing ``reel_board`` for your board:
-
-.. zephyr-app-commands::
-   :zephyr-app: samples/basic/blinky
-   :board: reel_board
-   :goals: build flash
-   :compact:
-
-After flashing, the LED starts to blink and messages with the current LED state
-are printed on the console. If a runtime error occurs, the sample exits without
-printing to the console.
-
-Build errors
-************
-
-You will see a build error at the source code line defining the ``struct
-gpio_dt_spec led`` variable if you try to build Blinky for an unsupported
-board.
-
-On GCC-based toolchains, the error looks like this:
+Required Configuration
+======================
+`prj.conf` should include:
 
 .. code-block:: none
 
-   error: '__device_dts_ord_DT_N_ALIAS_led_P_gpios_IDX_0_PH_ORD' undeclared here (not in a function)
+   CONFIG_GPIO=y
+   CONFIG_UART_ASYNC_API=y
+   CONFIG_SERIAL=y
+   CONFIG_UART_INTERRUPT_DRIVEN=y
+   CONFIG_HEAP_MEM_POOL_SIZE=1024
 
-Adding board support
-********************
+Device Tree Overlay
+===================
+Your `boards/nrf9151dk_nrf9151.overlay` should include:
 
-To add support for your board, add something like this to your devicetree:
-
-.. code-block:: DTS
+.. code-block:: dts
 
    / {
-   	aliases {
-   		led0 = &myled0;
-   	};
-
-   	leds {
-   		compatible = "gpio-leds";
-   		myled0: led_0 {
-   			gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
-                };
-   	};
+       aliases {
+           led0 = &gpio0  // Or whichever LED is on your board
+       };
    };
 
-The above sets your board's ``led0`` alias to use pin 13 on GPIO controller
-``gpio0``. The pin flags :c:macro:`GPIO_ACTIVE_HIGH` mean the LED is on when
-the pin is set to its high state, and off when the pin is in its low state.
+   &uart1 {
+       status = "okay";
+   };
 
-Tips:
+   &gpio0 {
+       de_pin: de-pin {
+           gpios = <&gpio0 23 GPIO_ACTIVE_HIGH>;
+       };
 
-- See :dtcompatible:`gpio-leds` for more information on defining GPIO-based LEDs
-  in devicetree.
+       re_pin: re-pin {
+           gpios = <&gpio0 22 GPIO_ACTIVE_HIGH>;
+       };
+   };
 
-- If you're not sure what to do, check the devicetrees for supported boards which
-  use the same SoC as your target. See :ref:`get-devicetree-outputs` for details.
+License
+=======
+SPDX-License-Identifier: Apache-2.0
 
-- See :zephyr_file:`include/zephyr/dt-bindings/gpio/gpio.h` for the flags you can use
-  in devicetree.
-
-- If the LED is built in to your board hardware, the alias should be defined in
-  your :ref:`BOARD.dts file <devicetree-in-out-files>`. Otherwise, you can
-  define one in a :ref:`devicetree overlay <set-devicetree-overlays>`.
+Author
+======
+JZ - 2025
