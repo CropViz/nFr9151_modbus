@@ -17,3 +17,6 @@
         de-gpios = <&gpio0 23 GPIO_ACTIVE_HIGH>;
     };
 };
+&uart1 {
+    current-speed = <9600>;
+};

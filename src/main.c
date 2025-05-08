@@ -104,33 +104,33 @@ int main(void)
 		return 0;
 	}
 
-	// Send data
-	gpio_pin_set_dt(&re_pin, 1); // RE HIGH (receiver disabled)
-	gpio_pin_set_dt(&de_pin, 1); // DE HIGH (transmit enabled)
-	k_msleep(20);
-	int ret0 = uart_tx(uart0, uart0_tx_buf, strlen(uart0_tx_buf), SYS_FOREVER_MS);
-	int ret1 = uart_tx(uart1, uart1_tx_buf, sizeof(uart1_tx_buf), SYS_FOREVER_MS);
-
-	if (ret0 < 0 || ret1 < 0)
-	{
-		printk("UART TX failed\n");
-		return 0;
-	}
-	gpio_pin_set_dt(&re_pin, 0); // RE LOW (receiver enabled)
-	gpio_pin_set_dt(&de_pin, 0); // DE LOW (transmit disabled)
-	k_msleep(20);
-	k_sem_take(&tx_done_sem_uart0, K_FOREVER);
-	k_sem_take(&tx_done_sem_uart1, K_FOREVER);
-
-	printk("UART0 and UART1 transmissions complete\n");
-	    printk("uart1_tx_buf: ");
-    for (size_t i = 0; i < sizeof(uart1_tx_buf); i++) {
-        printk("%02X ", uart1_tx_buf[i]);
-    }
-    printk("\n");
-
 	while (1)
 	{
+		// Send data
+		gpio_pin_set_dt(&re_pin, 1); // RE HIGH (receiver disabled)
+		gpio_pin_set_dt(&de_pin, 1); // DE HIGH (transmit enabled)
+		k_msleep(20);
+		int ret0 = uart_tx(uart0, uart0_tx_buf, strlen(uart0_tx_buf), SYS_FOREVER_MS);
+		int ret1 = uart_tx(uart1, uart1_tx_buf, sizeof(uart1_tx_buf), SYS_FOREVER_MS);
+
+		if (ret0 < 0 || ret1 < 0)
+		{
+			printk("UART TX failed\n");
+			return 0;
+		}
+		gpio_pin_set_dt(&re_pin, 0); // RE LOW (receiver enabled)
+		gpio_pin_set_dt(&de_pin, 0); // DE LOW (transmit disabled)
+		k_msleep(20);
+		k_sem_take(&tx_done_sem_uart0, K_FOREVER);
+		k_sem_take(&tx_done_sem_uart1, K_FOREVER);
+
+		printk("UART0 and UART1 transmissions complete\n");
+		// printk("uart1_tx_buf: ");
+		// for (size_t i = 0; i < sizeof(uart1_tx_buf); i++)
+		// {
+		// 	printk("%02X ", uart1_tx_buf[i]);
+		// }
+		// printk("\n");
 		// Wait for Modbus reply
 		if (k_sem_take(&rx_ready_sem_uart1, K_SECONDS(5)) == 0)
 		{
