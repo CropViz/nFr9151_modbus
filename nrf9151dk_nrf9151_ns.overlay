@@ -13,10 +13,12 @@
 
 / {
     rs485_ctrl: zephyr,user {
-        re-gpios = <&gpio0 22 GPIO_ACTIVE_LOW>;
+        re-gpios = <&gpio0 22 GPIO_ACTIVE_HIGH>;
         de-gpios = <&gpio0 23 GPIO_ACTIVE_HIGH>;
     };
 };
 &uart1 {
     current-speed = <9600>;
 };
+
+
