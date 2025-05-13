@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <string.h>
 #include <zephyr/kernel.h>
@@ -5,50 +6,52 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/uart.h>
 
-// Pines RS485: ajusta los alias o pines reales según tu overlay
-
+/**
+ * Macro definition for the RS485 node path in Zephyr.
+ */
 #define RS485_NODE DT_PATH(zephyr_user)
 #define RESPONSE_SIZE 9
 #define RECEIVE_TIMEOUT 100 // milliseconds
 
+/**
+ * Defines GPIO pin specifications for RS485 communication.
+ *
+ * The re_pin specifies the GPIO pin for RS485 receive enable.
+ * The de_pin specifies the GPIO pin for RS485 driver enable.
+ */
 static const struct gpio_dt_spec re_pin = GPIO_DT_SPEC_GET(RS485_NODE, re_gpios);
 static const struct gpio_dt_spec de_pin = GPIO_DT_SPEC_GET(RS485_NODE, de_gpios);
 
 const struct device *uart = DEVICE_DT_GET(DT_NODELABEL(uart1));
 
+/**
+ * Array representing a request command for read temperature an relative humidity.
+ */
 uint8_t requestCommand[] = {0x11, 0x03, 0x00, 0x00, 0x00, 0x02, 0xC6, 0x9B};
 
 static uint8_t rx_buf[12];
 static uint8_t sensor_data[RESPONSE_SIZE];
 static size_t sensor_data_len = 0;
-static bool full_response_received = false;
 
-// // Función para calcular el CRC16 Modbus
-// uint16_t ModRTU_CRC(uint8_t *buf, int len)
-// {
-// 	uint16_t crc = 0xFFFF;
+/**
+ * Define a semaphore with initial count and maximum count.
+ *
+ * @param rx_sem The name of the semaphore.
+ * @param initial_count The initial count of the semaphore.
+ * @param max_count The maximum count the semaphore can reach.
+ *
+ * @returns None
+ */
+K_SEM_DEFINE(rx_sem, 0, 1);
 
-// 	for (int pos = 0; pos < len; pos++)
-// 	{
-// 		crc ^= (uint16_t)buf[pos];
-
-// 		for (int i = 8; i != 0; i--)
-// 		{
-// 			if ((crc & 0x0001) != 0)
-// 			{
-// 				crc >>= 1;
-// 				crc ^= 0xA001;
-// 			}
-// 			else
-// 			{
-// 				crc >>= 1;
-// 			}
-// 		}
-// 	}
-// 	return crc;
-// }
-
-// Calcula el CRC16 (MODBUS) de un arreglo de bytes
+/**
+ * Calculates the CRC-16 checksum for the given data.
+ *
+ * @param data Pointer to the data array.
+ * @param length Length of the data array.
+ *
+ * @returns The CRC-16 checksum value.
+ */
 uint16_t calc_crc16(const uint8_t *data, uint8_t length)
 {
 	uint16_t crc = 0xFFFF;
@@ -75,6 +78,15 @@ uint16_t calc_crc16(const uint8_t *data, uint8_t length)
 	return crc;
 }
 
+/**
+ * Callback function for UART events handling.
+ *
+ * @param dev Pointer to the UART device structure.
+ * @param evt Pointer to the UART event structure.
+ * @param user_data Pointer to user data.
+ *
+ * @returns None
+ */
 static void uart_cb(const struct device *dev, struct uart_event *evt, void *user_data)
 {
 	switch (evt->type)
@@ -92,9 +104,8 @@ static void uart_cb(const struct device *dev, struct uart_event *evt, void *user
 
 		if (sensor_data_len >= RESPONSE_SIZE)
 		{
-			full_response_received = true;
-			// uart_rx_disable(dev); // Optional: stop receiving after full response
-			uart_rx_enable(dev, rx_buf, sizeof(rx_buf), RECEIVE_TIMEOUT);
+			k_sem_give(&rx_sem);  // Señal al hilo principal
+			uart_rx_disable(dev); // Deshabilitar la recepción
 		}
 		break;
 	}
@@ -104,15 +115,14 @@ static void uart_cb(const struct device *dev, struct uart_event *evt, void *user
 		break;
 
 	case UART_RX_BUF_REQUEST:
-		// Provide a new buffer if needed
+
 		break;
 
 	case UART_RX_BUF_RELEASED:
 		break;
 
 	case UART_RX_STOPPED:
-		// printk("UART RX stopped due to error: %d\n", evt->data.rx_stop.reason);
-		// uart_rx_enable(dev, rx_buf, sizeof(rx_buf), RECEIVE_TIMEOUT);
+		printk("UART RX stopped\n");
 		break;
 
 	default:
@@ -128,8 +138,8 @@ int main(void)
 		printk("GPIO not ready\n");
 		return 0;
 	}
-	ret = gpio_pin_configure_dt(&de_pin, GPIO_OUTPUT_INACTIVE);	 // DE LOW initially
-	ret |= gpio_pin_configure_dt(&re_pin, GPIO_OUTPUT_INACTIVE); // RE LOW (receiver enabled)
+	ret = gpio_pin_configure_dt(&de_pin, GPIO_OUTPUT_INACTIVE);	 // DE LOW
+	ret |= gpio_pin_configure_dt(&re_pin, GPIO_OUTPUT_INACTIVE); // RE LOW
 
 	if (ret < 0)
 	{
@@ -157,15 +167,15 @@ int main(void)
 
 	while (1)
 	{
-		gpio_pin_set_dt(&re_pin, 1); // RE HIGH (receiver disabled)
-		gpio_pin_set_dt(&de_pin, 1); // DE HIGH (transmit enabled)
+		gpio_pin_set_dt(&re_pin, 1); // RE HIGH
+		gpio_pin_set_dt(&de_pin, 1); // DE HIGH
 		k_msleep(200);
 		ret = uart_tx(uart, requestCommand, sizeof(requestCommand), SYS_FOREVER_MS);
-		k_msleep(10);				 // 20
-		gpio_pin_set_dt(&re_pin, 0); // RE HIGH (receiver disabled)
-		gpio_pin_set_dt(&de_pin, 0); // DE HIGH (transmit enabled)
+		k_msleep(10);
+		gpio_pin_set_dt(&re_pin, 0); // RE LOW
+		gpio_pin_set_dt(&de_pin, 0); // DE LOW
 
-		if (full_response_received)
+		if (k_sem_take(&rx_sem, K_MSEC(1000))) // full_response_received
 		{
 			printk("Modbus RTU response:\n");
 			for (int i = 0; i < RESPONSE_SIZE; i++)
@@ -174,20 +184,8 @@ int main(void)
 			}
 			printk("\n");
 
-			// // Calcular y verificar CRC
-			// uint16_t receivedCRC = (sensor_data[8] << 8) | sensor_data[7]; // orden inverso
-			// uint16_t calculatedCRC = calc_crc16(sensor_data, 9);		   // CRC de primeros 7 bytes
-
-			// if (receivedCRC != calculatedCRC)
-			// {
-			// 	printk("CRC check failed.");
-			// }
-
-			// Reset for next read
-			full_response_received = false;
 			sensor_data_len = 0;
 
-			// // Re-enable reception if disabled
 			uart_rx_enable(uart, rx_buf, sizeof(rx_buf), RECEIVE_TIMEOUT);
 
 			int16_t raw_temperature = sensor_data[3] << 8 | sensor_data[4];
