@@ -43,6 +43,7 @@ static size_t sensor_data_len = 0;
  * @returns None
  */
 K_SEM_DEFINE(rx_sem, 0, 1);
+K_SEM_DEFINE(tx_sem, 1, 1); // Semaphore for transmission, initialized as available
 
 /**
  * Calculates the CRC-16 checksum for the given data.
@@ -167,6 +168,9 @@ int main(void)
 
 	while (1)
 	{
+		// Acquire transmission semaphore before starting
+		k_sem_take(&tx_sem, K_FOREVER);  // Wait indefinitely for permission to transmit
+
 		gpio_pin_set_dt(&re_pin, 1); // RE HIGH
 		gpio_pin_set_dt(&de_pin, 1); // DE HIGH
 		k_msleep(200);
@@ -204,6 +208,7 @@ int main(void)
 		{
 			printk("No full response received yet.\n");
 		}
+		k_sem_give(&tx_sem); // Release semaphore after one transmission cycle
 		printk("-------------------\n");
 		k_msleep(8000); // Wait before next request
 	}
