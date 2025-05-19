@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <string.h>
 #include <zephyr/kernel.h>
@@ -5,22 +6,33 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/uart.h>
 
-// Pines RS485: ajusta los alias o pines reales según tu overlay
-
+/**
+ * Macro definition for the RS485 node path in Zephyr.
+ */
 #define RS485_NODE DT_PATH(zephyr_user)
 #define RESPONSE_SIZE 9
 #define RECEIVE_TIMEOUT 100 // milliseconds
 
+/**
+ * Defines GPIO pin specifications for RS485 communication.
+ *
+ * The re_pin specifies the GPIO pin for RS485 receive enable.
+ * The de_pin specifies the GPIO pin for RS485 driver enable.
+ */
 static const struct gpio_dt_spec re_pin = GPIO_DT_SPEC_GET(RS485_NODE, re_gpios);
 static const struct gpio_dt_spec de_pin = GPIO_DT_SPEC_GET(RS485_NODE, de_gpios);
 
 const struct device *uart = DEVICE_DT_GET(DT_NODELABEL(uart1));
 
+/**
+ * Array representing a request command for read temperature an relative humidity.
+ */
 uint8_t requestCommand[] = {0x11, 0x03, 0x00, 0x00, 0x00, 0x02, 0xC6, 0x9B};
 
 static uint8_t rx_buf[9];
 static uint8_t sensor_data[RESPONSE_SIZE];
 static size_t sensor_data_len = 0;
+
 static bool full_response_received = false;
 
 
@@ -51,6 +63,15 @@ uint16_t calc_crc16(const uint8_t *data, uint8_t length)
 	return crc;
 }
 
+/**
+ * Callback function for UART events handling.
+ *
+ * @param dev Pointer to the UART device structure.
+ * @param evt Pointer to the UART event structure.
+ * @param user_data Pointer to user data.
+ *
+ * @returns None
+ */
 static void uart_cb(const struct device *dev, struct uart_event *evt, void *user_data)
 {
 	switch (evt->type)
@@ -69,9 +90,11 @@ static void uart_cb(const struct device *dev, struct uart_event *evt, void *user
 
 		if (sensor_data_len < RESPONSE_SIZE)
 		{
+
 			full_response_received = true;
 			uart_rx_disable(dev); // Optional: stop receiving after full response
 			// uart_rx_enable(dev, rx_buf, sizeof(rx_buf), RECEIVE_TIMEOUT);
+
 		}
 		break;
 	}
@@ -83,6 +106,7 @@ static void uart_cb(const struct device *dev, struct uart_event *evt, void *user
 		break;
 
 	case UART_RX_BUF_REQUEST:
+
 		// Provide a new buffer if needed
 		// printk("UART RX buffer request\n");
 		break;
@@ -92,6 +116,7 @@ static void uart_cb(const struct device *dev, struct uart_event *evt, void *user
 		break;
 
 	case UART_RX_STOPPED:
+
 		printk("UART RX stopped due to error: %d\n", evt->data.rx_stop.reason);
 		printk("Last received data: ");
 		for (int i = 0; i < evt->data.rx_stop.data.len; i++)
@@ -99,6 +124,7 @@ static void uart_cb(const struct device *dev, struct uart_event *evt, void *user
 			printk("0x%02X ", evt->data.rx_stop.data.buf[i]);
 		}
 		uart_rx_enable(dev, rx_buf, sizeof(rx_buf), RECEIVE_TIMEOUT);
+
 		break;
 
 	default:
@@ -161,8 +187,8 @@ int main(void)
 		printk("GPIO not ready\n");
 		return 0;
 	}
-	ret = gpio_pin_configure_dt(&de_pin, GPIO_OUTPUT_INACTIVE);	 // DE LOW initially
-	ret |= gpio_pin_configure_dt(&re_pin, GPIO_OUTPUT_INACTIVE); // RE LOW (receiver enabled)
+	ret = gpio_pin_configure_dt(&de_pin, GPIO_OUTPUT_INACTIVE);	 // DE LOW
+	ret |= gpio_pin_configure_dt(&re_pin, GPIO_OUTPUT_INACTIVE); // RE LOW
 
 	if (ret < 0)
 	{
@@ -206,8 +232,10 @@ int main(void)
 
 	while (1)
 	{
+
 		transmit_data();
 		receive_data();
+
 		printk("-------------------\n");
 		k_msleep(8000); // Wait before next request
 	}
