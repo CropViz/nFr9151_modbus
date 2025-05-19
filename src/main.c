@@ -35,7 +35,6 @@ static size_t sensor_data_len = 0;
 
 static bool full_response_received = false;
 
-
 // Calcula el CRC16 (MODBUS) de un arreglo de bytes
 uint16_t calc_crc16(const uint8_t *data, uint8_t length)
 {
@@ -93,8 +92,7 @@ static void uart_cb(const struct device *dev, struct uart_event *evt, void *user
 
 			full_response_received = true;
 			uart_rx_disable(dev); // Optional: stop receiving after full response
-			// uart_rx_enable(dev, rx_buf, sizeof(rx_buf), RECEIVE_TIMEOUT);
-
+								  // uart_rx_enable(dev, rx_buf, sizeof(rx_buf), RECEIVE_TIMEOUT);
 		}
 		break;
 	}
@@ -102,7 +100,7 @@ static void uart_cb(const struct device *dev, struct uart_event *evt, void *user
 		// Restart reception
 		// printk("UART RX disabled\n");
 		uart_rx_enable(dev, rx_buf, sizeof(rx_buf), RECEIVE_TIMEOUT);
-		
+
 		break;
 
 	case UART_RX_BUF_REQUEST:
@@ -112,20 +110,20 @@ static void uart_cb(const struct device *dev, struct uart_event *evt, void *user
 		break;
 
 	case UART_RX_BUF_RELEASED:
-	// printk("UART RX buffer released\n");
+		// printk("UART RX buffer released\n");
 		break;
 
-	case UART_RX_STOPPED:
+		// case UART_RX_STOPPED:
 
-		printk("UART RX stopped due to error: %d\n", evt->data.rx_stop.reason);
-		printk("Last received data: ");
-		for (int i = 0; i < evt->data.rx_stop.data.len; i++)
-		{
-			printk("0x%02X ", evt->data.rx_stop.data.buf[i]);
-		}
-		uart_rx_enable(dev, rx_buf, sizeof(rx_buf), RECEIVE_TIMEOUT);
+		// 	printk("UART RX stopped due to error: %d\n", evt->data.rx_stop.reason);
+		// 	printk("Last received data: ");
+		// 	for (int i = 0; i < evt->data.rx_stop.data.len; i++)
+		// 	{
+		// 		printk("0x%02X ", evt->data.rx_stop.data.buf[i]);
+		// 	}
+		// 	uart_rx_enable(dev, rx_buf, sizeof(rx_buf), RECEIVE_TIMEOUT);
 
-		break;
+		// 	break;
 
 	default:
 		break;
